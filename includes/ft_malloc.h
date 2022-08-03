@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-size_t ft_sbrk(intptr_t increment);
-
-void free(void *ptr);
-int ft_malloc(size_t size);
-void *realloc(void *ptr, size_t size);
+int ft_sbrk(intptr_t increment);
+int get_block_header(int block);
+void ft_free(int ptr);
+int ft_malloc(int size);
+void *ft_realloc(void *ptr, int size);

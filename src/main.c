@@ -26,5 +26,9 @@ int main(void) {
   assert (ft_malloc(10), 36);
   assert (ft_malloc(0), -1);
   assert (ft_malloc(10), 52);
+  assert (get_block_header(4), 17);
+  assert (get_block_header(20), 17);
+  assert (get_block_header(36), 17);
+  assert (get_block_header(52), 17);
   return 0;
 }

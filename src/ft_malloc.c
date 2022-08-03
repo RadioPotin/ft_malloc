@@ -1,129 +1,190 @@
+/*
+// function call to help make implementation portable by asking
+// OS for the size of memory page
+int ft_getpagesize(void) {
+return ((int)getpagesize());
+}
+
+// get_size_from_tag function extracts the size from a block's tag, either header or footer
+int get_size_from_tag(int header_or_footer){
+int size;
+
+size = header_or_footer & BLOCK_SIZE_MASK;
+return (size);
+}
+
+
+// get_prev_footer function will return the footer of the previous block to
+// the one passed as parameter
+int get_prevblock_footer(void *block){
+int *header;
+
+header = block;
+return (*header - sizeof(int));
+}
+
+// get_prevblock_size function returns the size of the previous block
+int get_prevblock_size(void *block) {
+int prev_footer_tag;
+int size;
+
+prev_footer_tag = get_prevblock_footer(block);
+size = get_size_from_tag(prev_footer_tag);
+return (size);
+}
+
+
+int get_block_size(void *block) {
+int header_tag;
+int size;
+
+header_tag = get_block_header(block);
+size = get_size_from_tag(header_tag);
+return (size);
+}
+
+void *get_block_payload(void *ptr) {
+return (ptr + sizeof(int));
+}
+
+//
+int is_allocated_from_block(void *block) {
+int header_tag;
+
+header_tag = get_block_header(block);
+return(is_allocated_from_tag(header_tag));
+}
+
+ *
+ * */
 #include "ft_malloc.h"
+#include <stdio.h>
 
 #define BLOCK_ALLOC_MASK 1
-#define BLOCK_SIZE_MASK (-2)
+#define BLOCK_SIZE_MASK -2
 #define ALIGNMENT 8
 #define TAG_SIZE 4
 
-// block_classes[] will help organise free block lists by allocation size
-// Classifying blocks by number of words required for allocation(size_t)
+// allocated_list is a list of headers of allocated blocks
+char memory[23836];
 
-// free_list is a list of headers of free blocks
-size_t *free_list;
+int *brkk;
 
-size_t memory[238367];
+int memory_size = 23836;
 
-void *brkk;
+static void store_int(int addr, int block) {
+  int mask = 0xff;
 
-size_t align(size_t size) {
-  return (size + 7) / 8 * 8;
+  memory[addr] =  (unsigned char)(block >> 24);
+  memory[addr+1] = (unsigned char)((block >> 16) & mask);
+  memory[addr+2] = (unsigned char)((block >>8 & mask ));
+  memory[addr+3] = (unsigned char)(block & mask);
 }
 
-// temporary function to handle memory pages allocation
-size_t ft_sbrk(intptr_t increment){
-  void *old;
+static int load_int(int addr) {
+  int i;
 
-  old = brkk;
-  brkk = brkk + increment;
-  return (size_t)old;
+  i = memory[addr] << 24;
+  i |= memory[addr+1] << 16;
+  i |= memory[addr+2] << 8;
+  i |= memory[addr+3];
+  return i;
 }
 
-// function call to help make implementation portable by asking
-// OS for the size of memory page
-/*
-   size_t ft_getpagesize(void) {
-   return ((size_t)getpagesize());
-   }
-   */
+// get_header function will return the header of a block passed as parameter
+static int get_block_header(int offset) {
+  return load_int(offset - TAG_SIZE);
+}
+
+// is_allocated function returns dedicated allocation bit from a given block tag, either header or footer.
+static int is_allocated(int header_or_footer) {
+  return (header_or_footer & BLOCK_ALLOC_MASK);
+}
 
 // get_size_from_tag function extracts the size from a block's tag, either header or footer
-size_t get_size_from_tag(size_t header_or_footer){
-  size_t size;
+static int get_size(int header_or_footer){
+  int size;
 
   size = header_or_footer & BLOCK_SIZE_MASK;
   return (size);
 }
 
-// is_allocated function either returns dedicated allocation bit from a given block tag, either header or footer.
-size_t is_allocated_from_tag(size_t header_or_footer) {
-  return (header_or_footer & BLOCK_ALLOC_MASK);
+void print_tag(int tag, int i)
+{
+  int size, allocbit;
+
+  size = get_size(tag);
+  allocbit = is_allocated(tag);
+
+  printf("Header at address %d:\nSIZE: %d\nALLOCATED: %d\n\n", i, size, allocbit);
+  return;
 }
 
-// get_prev_footer function will return the footer of the previous block to
-// the one passed as parameter
-size_t get_prevblock_footer(void *block){
-  size_t *header;
 
-  header = block;
-  return (*header - sizeof(size_t));
-}
-
-// get_prevblock_size function returns the size of the previous block
-size_t get_prevblock_size(void *block) {
-  size_t prev_footer_tag;
-  size_t size;
-
-  prev_footer_tag = get_prevblock_footer(block);
-  size = get_size_from_tag(prev_footer_tag);
-  return (size);
-}
-
-// get_header function will return the header of a block passed as parameter
-size_t get_block_header(void *block) {
-  size_t *header;
-
-  header = block;
-  return *header;
-}
-
-size_t get_block_size(void *block) {
-  size_t header_tag;
-  size_t size;
-
-  header_tag = get_block_header(block);
-  size = get_size_from_tag(header_tag);
-  return (size);
-}
-
-void *get_block_payload(void *ptr) {
-  return (ptr + sizeof(size_t));
-}
-
-//
-size_t is_allocated_from_block(void *block) {
-  size_t header_tag;
-
-  header_tag = get_block_header(block);
-  return(is_allocated_from_tag(header_tag));
-}
-
-size_t set_tag(size_t size) {
-  size_t tag;
+// sets a tag with given size and allocation bit at 1
+static int set_tag(int size) {
+  int tag;
 
   tag = size | 1;
   return (tag);
 }
 
+//
+static int align(int size) {
+  return (size + 7) / 8 * 8;
+}
 
+// temporary function to handle memory pages allocation
+static int ft_sbrk(intptr_t increment){
+  int *old;
 
-void free(void *ptr);
-void *realloc(void *ptr, size_t size);
+  old = brkk;
+  brkk = brkk + increment;
 
-int ft_malloc(size_t size) {
+  return *old;
+}
+
+static int get_free_block(int freelist, int wantedsize) {
+  int tag;
+  int size;
+
+  if (freelist + wantedsize >= memory_size) {
+    return (-1);
+  }
+  tag = load_int(freelist);
+  size = get_size(tag);
+  if (tag == 0) {
+    return freelist;
+  } else if (!is_allocated(tag)) {
+    if (size >= wantedsize) {
+      return freelist;
+    }
+  }
+  return (get_free_block(freelist + size, wantedsize));
+}
+
+void ft_free(int ptr){
+  int addr;
+
+  addr = ptr - TAG_SIZE;
+  memory[addr] &= 0xfffe;
+}
+
+int ft_malloc(int size) {
+  int block_size;
+  int blockstart;
 
   if (size <= 0)
     return (-1);
 
-
-  // Test for available free blocks
-  // TODO
-  //
-  // enlarge BRK
-  size_t block_size = align(size);
-  size_t blockstart= ft_sbrk(block_size);
-  memory[blockstart] = set_tag(block_size);
-
+  block_size = align(size);
+  blockstart = get_free_block(0, block_size);
+  if (blockstart < 0) {
+    // enlarge BRK
+    blockstart = ft_sbrk(block_size);
+  }
+  store_int(blockstart, set_tag(block_size));
   return (blockstart + TAG_SIZE);
-
-  return (-1);
 }
+
+void *ft_realloc(void *ptr, int size);
