@@ -30,5 +30,10 @@ int main(void) {
   assert (get_block_header(20), 17);
   assert (get_block_header(36), 17);
   assert (get_block_header(52), 17);
+  ft_free(4);
+  assert (ft_malloc(10), 4);
+  ft_free(4);
+  assert (ft_malloc(16), 68);
+  assert (ft_malloc(10), 4);
   return 0;
 }

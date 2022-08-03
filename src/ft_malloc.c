@@ -72,15 +72,27 @@ int *brkk;
 
 int memory_size = 23836;
 
-static void store_int(int addr, int block) {
+// ARGUMENTS:
+// 1. address at which block is located in memory
+// 2. header of that block
+//
+// BEHAVIOUR:
+// Stores the header BYTE at that address in memory
+static void store_int(int addr, int header_of_block) {
   int mask = 0xff;
 
-  memory[addr] =  (unsigned char)(block >> 24);
-  memory[addr+1] = (unsigned char)((block >> 16) & mask);
-  memory[addr+2] = (unsigned char)((block >>8 & mask ));
-  memory[addr+3] = (unsigned char)(block & mask);
+  memory[addr] =  (unsigned char)(header_of_block >> 24);
+  memory[addr+1] = (unsigned char)((header_of_block >> 16) & mask);
+  memory[addr+2] = (unsigned char)((header_of_block >>8 & mask ));
+  memory[addr+3] = (unsigned char)(header_of_block & mask);
+  return ;
 }
 
+// ARGUMENT:
+// address of the header of a given block
+//
+// BEHAVIOUR:
+// returns the header BYTE at that address
 static int load_int(int addr) {
   int i;
 
@@ -91,7 +103,11 @@ static int load_int(int addr) {
   return i;
 }
 
-// get_header function will return the header of a block passed as parameter
+// ARGUMENT:
+// Offset address of a block. This address points at the payload, not the header
+//
+// BEHAVIOUR:
+// Returns the address of the header of that block.
 static int get_block_header(int offset) {
   return load_int(offset - TAG_SIZE);
 }
@@ -178,11 +194,15 @@ int ft_malloc(int size) {
     return (-1);
 
   block_size = align(size);
+  // look for an available free block
+  // of adequate size
   blockstart = get_free_block(0, block_size);
+  // if none is found
   if (blockstart < 0) {
-    // enlarge BRK
+    // enlarge BRK, allocate block
     blockstart = ft_sbrk(block_size);
   }
+  // store header tag, at address of allocated block
   store_int(blockstart, set_tag(block_size));
   return (blockstart + TAG_SIZE);
 }
