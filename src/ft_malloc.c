@@ -103,7 +103,7 @@ void print_header(int tag, int i)
 // Header of a block
 //
 // BEHAVIOUR:
-// Marks block as allocated
+// Marks block as FREE
 static int unset_tag(int header) {
   return (header & 0xfffe);
 }
@@ -182,6 +182,8 @@ static int get_free_block(int list, int wantedsize) {
 // Frees the block given as argument,
 // Coalesces it with the previous and next free block if possible
 // (in order to limit fragmentation)
+// TODO
+// Coalesce with previous block
 void ft_free(int ptr){
   int addr_of_next_header;
   int next_header;
