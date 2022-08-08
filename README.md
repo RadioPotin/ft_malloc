@@ -15,3 +15,4 @@ void *realloc(void *ptr, size_t size);
 ```
 
 Allowed function calls are `mmap(2)`, `munmap(2)`, `getpagesize(3)`, `getrlimit(2)`. 
+

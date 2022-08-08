@@ -4,66 +4,15 @@
 int ft_getpagesize(void) {
 return ((int)getpagesize());
 }
+*/
 
-// get_size_from_tag function extracts the size from a block's tag, either header or footer
-int get_size_from_tag(int header_or_footer){
-int size;
-
-size = header_or_footer & BLOCK_SIZE_MASK;
-return (size);
-}
-
-
-// get_prev_footer function will return the footer of the previous block to
-// the one passed as parameter
-int get_prevblock_footer(void *block){
-int *header;
-
-header = block;
-return (*header - sizeof(int));
-}
-
-// get_prevblock_size function returns the size of the previous block
-int get_prevblock_size(void *block) {
-int prev_footer_tag;
-int size;
-
-prev_footer_tag = get_prevblock_footer(block);
-size = get_size_from_tag(prev_footer_tag);
-return (size);
-}
-
-
-int get_block_size(void *block) {
-int header_tag;
-int size;
-
-header_tag = get_block_header(block);
-size = get_size_from_tag(header_tag);
-return (size);
-}
-
-void *get_block_payload(void *ptr) {
-return (ptr + sizeof(int));
-}
-
-//
-int is_allocated_from_block(void *block) {
-int header_tag;
-
-header_tag = get_block_header(block);
-return(is_allocated_from_tag(header_tag));
-}
-
- *
- * */
 #include "ft_malloc.h"
 #include <stdio.h>
 
 #define BLOCK_ALLOC_MASK 1
 #define BLOCK_SIZE_MASK -2
 #define ALIGNMENT 8
-#define TAG_SIZE 4
+#define HEADER_SIZE 4
 
 // allocated_list is a list of headers of allocated blocks
 char memory[23836];
@@ -108,16 +57,25 @@ static int load_int(int addr) {
 //
 // BEHAVIOUR:
 // Returns the address of the header of that block.
-static int get_block_header(int offset) {
-  return load_int(offset - TAG_SIZE);
+int get_block_header(int offset) {
+  return load_int(offset - HEADER_SIZE);
 }
 
-// is_allocated function returns dedicated allocation bit from a given block tag, either header or footer.
+// ARGUMENT:
+// header or the footer of a block
+//
+// BEHAVIOUR:
+// Returns 0 if not allocated
+// Returns 1 if allocated
 static int is_allocated(int header_or_footer) {
   return (header_or_footer & BLOCK_ALLOC_MASK);
 }
 
-// get_size_from_tag function extracts the size from a block's tag, either header or footer
+// ARGUMENT:
+//  header or the footer of a block
+//
+// BEHAVIOUR:
+// Returns the size of a block
 static int get_size(int header_or_footer){
   int size;
 
@@ -125,7 +83,12 @@ static int get_size(int header_or_footer){
   return (size);
 }
 
-void print_tag(int tag, int i)
+// ARGUMENT
+// 1. Tag of a block
+// 2. Address of Tag
+//
+// DEBUG FUNCT
+void print_header(int tag, int i)
 {
   int size, allocbit;
 
@@ -136,75 +99,142 @@ void print_tag(int tag, int i)
   return;
 }
 
-
-// sets a tag with given size and allocation bit at 1
-static int set_tag(int size) {
-  int tag;
-
-  tag = size | 1;
-  return (tag);
-}
-
+// ARGUMENT:
+// Header of a block
 //
-static int align(int size) {
-  return (size + 7) / 8 * 8;
+// BEHAVIOUR:
+// Marks block as allocated
+static int unset_tag(int header) {
+  return (header & 0xfffe);
 }
 
+// ARGUMENT:
+// Header of a block
+//
+// BEHAVIOUR:
+// Marks block as allocated
+static int set_tag(int header) {
+  return (header | 1);
+}
+
+// ARGUMENT:
+// Size required by user
+//
+// Behaviour:
+// Return a new size aligned on a multiple of 8.
+// If Size is already a multiple,
+//      returns (size + headersize)
+// Else
+//      return the next greater multiple (with header size considered)
+static int align(int size) {
+  return (size + HEADER_SIZE + 7) / 8 * 8;
+}
+
+// ARUGMENT:
+// Takes an increment of the current pointer to the total memory available
+//
+// BEHAVIOUR:
+// Increments pointer to total memory available
+// Returns the previous pointer before incrementation
+//
 // temporary function to handle memory pages allocation
 static int ft_sbrk(intptr_t increment){
   int *old;
 
   old = brkk;
   brkk = brkk + increment;
-
   return *old;
 }
 
-static int get_free_block(int freelist, int wantedsize) {
+// ARGUMENTS:
+// 1. Takes a pointer to a list of header block
+// 2. Size needed for allocation of new block
+//
+// BEHAVIOUR:
+// Return -1 is no block is no free block is found
+// Otherwise returns address of header of a adequate block
+static int get_free_block(int list, int wantedsize) {
   int tag;
   int size;
 
-  if (freelist + wantedsize >= memory_size) {
+  if (list + wantedsize >= memory_size) {
     return (-1);
   }
-  tag = load_int(freelist);
+  tag = load_int(list);
   size = get_size(tag);
   if (tag == 0) {
-    return freelist;
+    return list;
   } else if (!is_allocated(tag)) {
     if (size >= wantedsize) {
-      return freelist;
+      // TODO
+      // Create new block after allocated one
+      // with newsize=(size-wantedsize)
+      return list;
     }
   }
-  return (get_free_block(freelist + size, wantedsize));
+  return (get_free_block(list + size, wantedsize));
 }
 
+// ARGUMENT:
+// Pointer to free
+//
+// BEHAVIOUR:
+// Frees the block given as argument,
+// Coalesces it with the previous and next free block if possible
+// (in order to limit fragmentation)
 void ft_free(int ptr){
-  int addr;
+  int addr_of_next_header;
+  int next_header;
+  int next_size;
+  int addr_of_header;
+  int header;
+  int size;
 
-  addr = ptr - TAG_SIZE;
-  memory[addr] &= 0xfffe;
+  if (!ptr)
+    return ;
+  // get addr of header
+  addr_of_header = ptr - HEADER_SIZE;
+  // load header
+  header = load_int(addr_of_header);
+  // make header free
+  header = unset_tag(header);
+  // get size of given header
+  size = get_size(header);
+  // get addr of next header after current
+  addr_of_next_header = addr_of_header + size;
+  if (addr_of_next_header < memory_size) {
+    // load next header
+    next_header = load_int(addr_of_next_header);
+    if (!is_allocated(next_header)) {
+      // if next header is also free
+      // get its size for coalescing to first one
+      next_size = get_size(next_header);
+      // update size of first header
+      header += next_size;
+    }
+  }
+  store_int(addr_of_header, header);
 }
 
 int ft_malloc(int size) {
-  int block_size;
+  int header;
   int blockstart;
 
   if (size <= 0)
     return (-1);
 
-  block_size = align(size);
+  header = align(size);
   // look for an available free block
   // of adequate size
-  blockstart = get_free_block(0, block_size);
+  blockstart = get_free_block(0, header);
   // if none is found
   if (blockstart < 0) {
     // enlarge BRK, allocate block
-    blockstart = ft_sbrk(block_size);
+    blockstart = ft_sbrk(header);
   }
-  // store header tag, at address of allocated block
-  store_int(blockstart, set_tag(block_size));
-  return (blockstart + TAG_SIZE);
+  // store header, at address of allocated block
+  store_int(blockstart, set_tag(header));
+  return (blockstart + HEADER_SIZE);
 }
 
 void *ft_realloc(void *ptr, int size);
