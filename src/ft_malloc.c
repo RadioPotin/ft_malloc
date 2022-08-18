@@ -77,10 +77,7 @@ static int is_allocated(int header_or_footer) {
 // BEHAVIOUR:
 // Returns the size of a block
 static int get_size(int header_or_footer){
-  int size;
-
-  size = header_or_footer & BLOCK_SIZE_MASK;
-  return (size);
+  return (header_or_footer & BLOCK_SIZE_MASK);
 }
 
 // ARGUMENT
@@ -156,6 +153,8 @@ static int ft_sbrk(intptr_t increment){
 static int get_free_block(int list, int wantedsize) {
   int tag;
   int size;
+  int tmp_ptr;
+  int newsize;
 
   if (list + wantedsize >= memory_size) {
     return (-1);
@@ -166,9 +165,16 @@ static int get_free_block(int list, int wantedsize) {
     return list;
   } else if (!is_allocated(tag)) {
     if (size >= wantedsize) {
-      // TODO
-      // Create new block after allocated one
-      // with newsize=(size-wantedsize)
+      // go to next block and check if it's of size 0
+      // If so,
+      // put a header at that address with relevant
+      // information on the remaining room of free block
+      tmp_ptr = list + wantedsize;
+      tag = load_int(tmp_ptr);
+      if (!get_size(tag)) {
+        newsize = size - wantedsize;
+        store_int(tmp_ptr, newsize);
+      }
       return list;
     }
   }
@@ -214,8 +220,30 @@ void ft_free(int ptr){
       // update size of first header
       header += next_size;
     }
-  }
+    /*
+     * TODO, add FOOTER to blocks
+   int addr_of_prev_header;
+   int prev_header;
+   int prev_size;
+   // get addr of prev header before current
+     addr_of_prev_header = (addr_of_header - HEADER_SIZE;
+     if (addr_of_prev_header > 0)
+     {
+     // load prev header
+       prev_header = load_int(addr_of_prev_header);
+       if (!is_allocated(prev_header)) {
+       // if prev header is also free
+       // set its size to correct value in order to
+       // coalesce with the next ones (current + possible next)
+         prev_header += header;
+       }
+       store_int(addr_of_prev_header, prev_header);
+       return ;
+     }
+     */
+    }
   store_int(addr_of_header, header);
+  return ;
 }
 
 int ft_malloc(int size) {
