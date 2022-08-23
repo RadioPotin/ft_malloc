@@ -252,8 +252,6 @@ static int get_free_block(int list, int wantedsize) {
 // Frees the block given as argument,
 // Coalesces it with the previous and next free block if possible
 // (in order to limit fragmentation)
-// TODO
-// Coalesce with previous block
 void ft_free(int ptr) {
   int addr_of_next_header;
   int next_header;
@@ -304,6 +302,14 @@ void ft_free(int ptr) {
   return ;
 }
 
+
+// ARGUMENT:
+// Minimum size to allocate
+//
+// BEHAVIOUR:
+// Allocates at least a size number of bytes in memory
+// Returns a pointer to the start of the available `rxw` memory
+// Returns NULL in case of error
 int ft_malloc(int size) {
   int header;
   int header_addr;
@@ -328,29 +334,38 @@ int ft_malloc(int size) {
   return (header_addr + TAG_SIZE);
 }
 
+// ARGUMENT:
+// 1. Pointer to reallocate
+// 2. Minimum size that the result pointer should have
+//
+// BEHAVIOUR:
+// Returns a pointer to memory chunk of sufficient size
+//
+// EDGE CASES:
+// man realloc(3) states:
+// if  size  is  equal to zero, and ptr is not NULL,
+// then the call is equivalent to  free(ptr)
+// (this behavior  is  nonportable;  see NOTES)
+//
+// man realloc(3) states:
+// If ptr is NULL,
+// then the call is equivalent to malloc(size),
+// for all values of  size;
 int ft_realloc(int ptr, int size) {
   int header_addr;
   int header;
   int block_size;
   int payload_size;
   int new_ptr;
-  int new_size;
+  int new_payload_addr;
 
   header_addr = ptr - TAG_SIZE;
   header = load_int(header_addr);
   block_size = get_size(header);
   payload_size = block_size - (TAG_SIZE * 2);
-  // man realloc(3) states:
-  // if  size  is  equal to zero, and ptr is not NULL,
-  // then the call is equivalent to  free(ptr)
-  // (this behavior  is  nonportable;  see NOTES)
   if (ptr && !size) {
     ft_free(ptr);
   } else if (!ptr && size) {
-    // man realloc(3) states:
-    // If ptr is NULL,
-    // then the call is equivalent to malloc(size),
-    // for all values of  size;
     return (ft_malloc(size));
   }
   // check if ptr is bound to the current range of heap
@@ -358,18 +373,17 @@ int ft_realloc(int ptr, int size) {
     // given ptr payload is big enough
     if (size <= payload_size) {
       return ptr;
-    } else {
-      // realloc
-      new_size = align(size);
-      // change header of block
-      // change footer of block
-      // split block
-
-      ft_free(ptr);
-      return new_ptr;
     }
-    // call sbrk here probably
-    //
+    // realloc
+    new_payload_addr = ft_malloc(size);
+    if (new_payload_addr < 0)
+      return -1;
+
+    // TODO
+    // COPYPAYLOAD FUNCTION
+    copy_payload(ptr, new_payload_addr);
+    ft_free(ptr);
+    return new_payload_addr;
   }
   return -1;
 }
