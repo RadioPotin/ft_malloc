@@ -268,44 +268,32 @@ void ft_free(int ptr) {
   int addr_of_prev_footer;
   int prev_footer;
 
-  // get addr of header
   addr_of_current_header = ptr - TAG_SIZE;
   addr_of_current_footer = get_block_footer_addr(ptr);
 
-  // load header
   current_header = load_int(addr_of_current_header);
   if (!ptr || !is_allocated(current_header))
     return ;
 
-  // get size of given header
   current_size = get_size(current_header);
-  // get addr of next header after current
   addr_of_next_header = addr_of_current_header + current_size;
   // COALESCE WITH RIGHT SIDE BLOCK
   if (addr_of_next_header < memory_size) {
-    // load next header
     next_header = load_int(addr_of_next_header);
     if (!is_allocated(next_header)) {
-      // if next header is also free
-      // get its size for coalescing to first one
       next_size = get_size(next_header);
-      // update size of first header
       current_header += next_size;
     }
   }
   store_int(addr_of_current_header, unset_tag(current_header));
   store_int(addr_of_current_footer, unset_tag(current_header));
 
-  // get addr of prev header before current
   addr_of_prev_footer = (addr_of_current_header - TAG_SIZE);
   // COALESCE WITH LEFT SIDE BLOCK
   if (addr_of_prev_footer > 0)
   {
     prev_footer = load_int(addr_of_prev_footer);
     if (!is_allocated(prev_footer)) {
-      // if prev header is also free
-      // set its size to correct value in order to
-      // coalesce with the next ones (current + possible next)
       prev_footer += current_header;
     }
     store_int(addr_of_prev_footer, prev_footer);
@@ -335,11 +323,53 @@ int ft_malloc(int size) {
   }
   // store header, at address of allocated block
   store_int(header_addr, set_tag(header));
-  // get addr of footer
   footer_addr = get_block_footer_addr(header_addr + TAG_SIZE);
-  // store footer
   store_int(footer_addr, set_tag(header));
   return (header_addr + TAG_SIZE);
 }
 
-void *ft_realloc(void *ptr, int size);
+int ft_realloc(int ptr, int size) {
+  int header_addr;
+  int header;
+  int block_size;
+  int payload_size;
+  int new_ptr;
+  int new_size;
+
+  header_addr = ptr - TAG_SIZE;
+  header = load_int(header_addr);
+  block_size = get_size(header);
+  payload_size = block_size - (TAG_SIZE * 2);
+  // man realloc(3) states:
+  // if  size  is  equal to zero, and ptr is not NULL,
+  // then the call is equivalent to  free(ptr)
+  // (this behavior  is  nonportable;  see NOTES)
+  if (ptr && !size) {
+    ft_free(ptr);
+  } else if (!ptr && size) {
+    // man realloc(3) states:
+    // If ptr is NULL,
+    // then the call is equivalent to malloc(size),
+    // for all values of  size;
+    return (ft_malloc(size));
+  }
+  // check if ptr is bound to the current range of heap
+  if (ptr && ptr < memory_size) {
+    // given ptr payload is big enough
+    if (size <= payload_size) {
+      return ptr;
+    } else {
+      // realloc
+      new_size = align(size);
+      // change header of block
+      // change footer of block
+      // split block
+
+      ft_free(ptr);
+      return new_ptr;
+    }
+    // call sbrk here probably
+    //
+  }
+  return -1;
+}
