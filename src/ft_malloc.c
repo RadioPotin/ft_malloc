@@ -12,7 +12,7 @@ return ((int)getpagesize());
 #define BLOCK_ALLOC_MASK 1
 #define BLOCK_SIZE_MASK -2
 #define ALIGNMENT 8
-#define HEADER_SIZE 4
+#define TAG_SIZE 4
 
 // allocated_list is a list of headers of allocated blocks
 char memory[23836];
@@ -38,7 +38,7 @@ static void store_int(int addr, int header_of_block) {
 }
 
 // ARGUMENT:
-// address of the header of a given block
+// address of a TAG (footer or header) of a given block
 //
 // BEHAVIOUR:
 // returns the header BYTE at that address
@@ -50,15 +50,6 @@ static int load_int(int addr) {
   i |= memory[addr+2] << 8;
   i |= memory[addr+3];
   return i;
-}
-
-// ARGUMENT:
-// Offset address of a block. This address points at the payload, not the header
-//
-// BEHAVIOUR:
-// Returns the address of the header of that block.
-int get_block_header(int offset) {
-  return load_int(offset - HEADER_SIZE);
 }
 
 // ARGUMENT:
@@ -97,7 +88,7 @@ void print_header(int tag, int i)
 }
 
 // ARGUMENT:
-// Header of a block
+// Header/footer of a block
 //
 // BEHAVIOUR:
 // Marks block as FREE
@@ -106,12 +97,85 @@ static int unset_tag(int header) {
 }
 
 // ARGUMENT:
-// Header of a block
+// Header/footer of a block
 //
 // BEHAVIOUR:
 // Marks block as allocated
 static int set_tag(int header) {
   return (header | 1);
+}
+
+// ARGUMENT:
+// Address of a block FOOTER.
+//
+// BEHAVIOUR:
+// Returns the address of the header of that block.
+int get_header_addr_from_footer_addr(int addr_of_footer)
+{
+  int size;
+  int footer;
+  int addr_of_header;
+
+  footer = load_int(addr_of_footer);
+  size = get_size(footer);
+  addr_of_header = addr_of_footer - (size - TAG_SIZE);
+  return addr_of_header;
+}
+
+// ARGUMENT:
+// Address of a block FOOTER.
+//
+// BEHAVIOUR:
+// Returns the header of that block.
+int get_header_from_footer(int addr_of_footer)
+{
+  int addr_of_header;
+
+  addr_of_header = get_header_addr_from_footer_addr(addr_of_footer);
+  return load_int(addr_of_header);
+}
+
+// ARGUMENT:
+// Offset address of a block.
+// This address points to the payload, not the header
+//
+// BEHAVIOUR:
+// Returns the header of that block.
+int get_block_header(int offset) {
+  return load_int(offset - TAG_SIZE);
+}
+
+// ARGUMENT:
+// Offset address of a block.
+// This address points to the payload, not the header
+//
+// BEHAVIOUR:
+// Returns the address of the footer of that block.
+int get_block_footer_addr(int offset) {
+  int header;
+  int header_addr;
+  int size;
+  int footer_address;
+
+  header_addr = offset - TAG_SIZE;
+  header = load_int(header_addr);
+  size = get_size(header);
+  footer_address = (header_addr + size) - TAG_SIZE;
+  return footer_address;
+}
+
+// ARGUMENT:
+// Offset address of a block.
+// This address points to the payload, not the header
+//
+// BEHAVIOUR:
+// Returns the value of the footer of block given as arg.
+int get_block_footer(int offset)
+{
+  int footer_addr;
+
+  footer_addr = get_block_footer_addr(offset);
+  return (load_int(footer_addr));
 }
 
 // ARGUMENT:
@@ -122,9 +186,9 @@ static int set_tag(int header) {
 // If Size is already a multiple,
 //      returns (size + headersize)
 // Else
-//      return the next greater multiple (with header size considered)
+//      return the next greater multiple (with header AND footer sizes considered)
 static int align(int size) {
-  return (size + HEADER_SIZE + 7) / 8 * 8;
+  return (size + TAG_SIZE + TAG_SIZE + 7) / 8 * 8;
 }
 
 // ARUGMENT:
@@ -190,26 +254,34 @@ static int get_free_block(int list, int wantedsize) {
 // (in order to limit fragmentation)
 // TODO
 // Coalesce with previous block
-void ft_free(int ptr){
+void ft_free(int ptr) {
   int addr_of_next_header;
   int next_header;
   int next_size;
-  int addr_of_header;
-  int header;
-  int size;
 
-  if (!ptr)
-    return ;
+  int addr_of_current_header;
+  int addr_of_current_footer;
+  int current_header;
+  int current_size;
+
+  int addr_of_prev_header;
+  int addr_of_prev_footer;
+  int prev_footer;
+
   // get addr of header
-  addr_of_header = ptr - HEADER_SIZE;
+  addr_of_current_header = ptr - TAG_SIZE;
+  addr_of_current_footer = get_block_footer_addr(ptr);
+
   // load header
-  header = load_int(addr_of_header);
-  // make header free
-  header = unset_tag(header);
+  current_header = load_int(addr_of_current_header);
+  if (!ptr || !is_allocated(current_header))
+    return ;
+
   // get size of given header
-  size = get_size(header);
+  current_size = get_size(current_header);
   // get addr of next header after current
-  addr_of_next_header = addr_of_header + size;
+  addr_of_next_header = addr_of_current_header + current_size;
+  // COALESCE WITH RIGHT SIDE BLOCK
   if (addr_of_next_header < memory_size) {
     // load next header
     next_header = load_int(addr_of_next_header);
@@ -218,37 +290,36 @@ void ft_free(int ptr){
       // get its size for coalescing to first one
       next_size = get_size(next_header);
       // update size of first header
-      header += next_size;
+      current_header += next_size;
     }
-    /*
-     * TODO, add FOOTER to blocks
-   int addr_of_prev_header;
-   int prev_header;
-   int prev_size;
-   // get addr of prev header before current
-     addr_of_prev_header = (addr_of_header - HEADER_SIZE;
-     if (addr_of_prev_header > 0)
-     {
-     // load prev header
-       prev_header = load_int(addr_of_prev_header);
-       if (!is_allocated(prev_header)) {
-       // if prev header is also free
-       // set its size to correct value in order to
-       // coalesce with the next ones (current + possible next)
-         prev_header += header;
-       }
-       store_int(addr_of_prev_header, prev_header);
-       return ;
-     }
-     */
+  }
+  store_int(addr_of_current_header, unset_tag(current_header));
+  store_int(addr_of_current_footer, unset_tag(current_header));
+
+  // get addr of prev header before current
+  addr_of_prev_footer = (addr_of_current_header - TAG_SIZE);
+  // COALESCE WITH LEFT SIDE BLOCK
+  if (addr_of_prev_footer > 0)
+  {
+    prev_footer = load_int(addr_of_prev_footer);
+    if (!is_allocated(prev_footer)) {
+      // if prev header is also free
+      // set its size to correct value in order to
+      // coalesce with the next ones (current + possible next)
+      prev_footer += current_header;
     }
-  store_int(addr_of_header, header);
+    store_int(addr_of_prev_footer, prev_footer);
+    addr_of_prev_header = get_header_addr_from_footer_addr(addr_of_prev_footer);
+    store_int(addr_of_prev_header, prev_footer);
+    return ;
+  }
   return ;
 }
 
 int ft_malloc(int size) {
   int header;
-  int blockstart;
+  int header_addr;
+  int footer_addr;
 
   if (size <= 0)
     return (-1);
@@ -256,15 +327,19 @@ int ft_malloc(int size) {
   header = align(size);
   // look for an available free block
   // of adequate size
-  blockstart = get_free_block(0, header);
+  header_addr = get_free_block(0, header);
   // if none is found
-  if (blockstart < 0) {
+  if (header_addr < 0) {
     // enlarge BRK, allocate block
-    blockstart = ft_sbrk(header);
+    header_addr = ft_sbrk(header);
   }
   // store header, at address of allocated block
-  store_int(blockstart, set_tag(header));
-  return (blockstart + HEADER_SIZE);
+  store_int(header_addr, set_tag(header));
+  // get addr of footer
+  footer_addr = get_block_footer_addr(header_addr + TAG_SIZE);
+  // store footer
+  store_int(footer_addr, set_tag(header));
+  return (header_addr + TAG_SIZE);
 }
 
 void *ft_realloc(void *ptr, int size);
